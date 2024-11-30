@@ -1,40 +1,27 @@
-export interface Character {
-  name: string;
-  role: string;
-  personality: string;
-  background: string;
-  exampleDialogue?: string[];
-  referenceText?: string;
+export enum SectionType {
+  INTRODUCTION = 'introduction',
+  CONTEXT = 'context',
+  ROLE = 'role',
+  DEPLOYMENT = 'deployment',
+  BENEFITS = 'benefits',
+  CHALLENGES = 'challenges',
+  CONCLUSION = 'conclusion'
+}
+
+export interface ScriptSection {
+  type: SectionType;
+  title: string;
+  content: string;
+  instructions: string;
 }
 
 export interface PromptContext {
   topic: string;
-  characters: Character[];
+  characters: Array<{ name: string; role: string }>;
   additionalContext?: string[];
-  format?: string;
 }
 
-export interface PromptTemplate {
+export interface GeneratedScript {
+  section: SectionType;
   content: string;
-  variables: string[];
-}
-
-export interface XMLPrompt {
-  system: string;
-  context: string;
-  characters: string;
-  format: string;
-  examples?: string;
-  podcastStyle?: PodcastReference[];
-}
-
-export interface PodcastReference {
-  name: string;
-  episode: string;
-  transcript: string;
-  notes?: {
-    style?: string[];
-    techniques?: string[];
-    format?: string[];
-  };
 } 

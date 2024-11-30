@@ -11,7 +11,7 @@ export const config = {
 };
 
 export const speakerVoices: SpeakerVoice[] = [
-  { speaker: 'Charlie', voiceId: 'CwhRBWXzGAHq8TQ4Fs17' },
-  { speaker: 'Evie', voiceId: 'EXAVITQu4vr4xnSDxMaL' },
-  { speaker: 'Ravi', voiceId: 'bIHbv24MWmeRgasZH58o' },
+  { speaker: 'Charlie', voiceId: 'iP95p4xoKVk53GoZ742B' },
+  { speaker: 'Evie', voiceId: 'cgSgspJ2msm6clMCkdW9' },
+  { speaker: 'Ravi', voiceId: 'cjVigY5qzO86Huf0OWal' },
 ]; 

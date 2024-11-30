@@ -1,37 +1,28 @@
 import OpenAI from 'openai';
-import { PromptBuilder } from './promptBuilder';
-import { PromptContext } from './types';
+import { PromptContext, GeneratedScript, ScriptSection } from './types';
 
-export class ScriptGenerator {
-  private openai: OpenAI;
-  private promptBuilder: PromptBuilder;
+export class OpenAIService {
+  private client: OpenAI;
 
   constructor(apiKey: string) {
-    this.openai = new OpenAI({ apiKey });
-    this.promptBuilder = new PromptBuilder();
+    this.client = new OpenAI({ apiKey });
   }
 
-  async initialize() {
-    await this.promptBuilder.initialize();
-  }
-
-  async generateScript(context: PromptContext): Promise<string> {
-    const xmlPrompt = await this.promptBuilder.buildPrompt(context);
-
-    const completion = await this.openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
+  async generateScriptSection(prompt: string): Promise<string> {
+    const completion = await this.client.chat.completions.create({
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: "You are a skilled scriptwriter who understands XML-formatted prompts. Generate dialogue based on the XML structure provided."
+          content: "You are a podcast script writer. Write natural, conversational dialogue."
         },
         {
           role: "user",
-          content: xmlPrompt
+          content: prompt
         }
       ],
       temperature: 0.7,
-      response_format: { type: "text" }
+      max_tokens: 16_384,
     });
 
     return completion.choices[0].message.content || '';

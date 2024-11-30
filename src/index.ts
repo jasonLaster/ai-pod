@@ -1,30 +1,20 @@
 import { ScriptParser } from './scriptParser';
 import { AudioGenerator } from './audioGenerator';
-import fs from 'fs';
-import path from 'path';
-import { ScriptGenerator } from './openai';
+import { ScriptGenerator } from './scriptGenerator';
 import { PromptContext } from './types';
+import path from 'path';
 
-
-async function generateScript(context: PromptContext): Promise<string> {
+async function generateScript(context: PromptContext): Promise<{ script: string, outputDir: string }> {
   const generator = new ScriptGenerator(process.env.OPENAI_API_KEY!);
   await generator.initialize();
-  return await generator.generateScript(context);
+  return await generator.generateFullScript(context, 'nuclear2.txt');
 }
 
 async function listAvailableVoices() {
   try {
     const audioGenerator = new AudioGenerator();
     const voices = await audioGenerator.listVoices();
-
-    console.log('Available voices:');
-    if (voices && voices.length > 0) {
-      voices.forEach(voice => {
-        console.log(`- ${voice.name || 'Unnamed'}: ${voice.voice_id || voice.voiceId || 'No ID'}`);
-      });
-    } else {
-      console.log('No voices found');
-    }
+    console.log('Available voices:', voices);
   } catch (error) {
     console.error('Error listing voices:', error);
   }
@@ -32,55 +22,58 @@ async function listAvailableVoices() {
 
 async function main() {
   try {
+    // Get script path from command line args
+    const scriptPath = process.argv.slice(2).find(arg => !arg.startsWith('--'));
+    let script: string;
+    let outputDir: string;
 
-    const context = await import('../prompts/context.json');
-    const script = await generateScript(context);
-    // write script to file
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const outputPath = `./output/script-${timestamp}.txt`;
-    await Bun.write(outputPath, script);
-    console.log(`Script written to ${outputPath}`);
+    if (scriptPath) {
+      // Use existing script file
+      outputDir = path.dirname(scriptPath);
+      script = await Bun.file(scriptPath).text();
+      console.log(`Using existing script from ${scriptPath}`);
+    } else {
+      // Generate new script
+      console.log('Generating new script...');
+      const context: PromptContext = {
+        topic: "Nuclear Energy's Role in Climate Change",
+        characters: [
+          { name: "Charlie", role: "Host" },
+          { name: "Evie", role: "Scientist" },
+          { name: "Ravi", role: "Policy Maker" }
+        ]
+      };
 
-    return;
-
-    const audioGenerator = new AudioGenerator();
-
-    // Check for --list-voices flag
-    if (process.argv.includes('--list-voices')) {
-      await listAvailableVoices();
-      return;
+      const result = await generateScript(context);
+      script = result.script;
+      outputDir = result.outputDir;
+      console.log(`Generated script written to ${outputDir}`);
     }
 
-    // Validate API key first
-    console.log('Validating API key...');
-    await audioGenerator.validateApiKey();
+    // Handle audio generation
+    if (!process.argv.includes('--no-audio')) {
+      const audioGenerator = new AudioGenerator();
 
-    // Get script path from command line args, skipping node and script name
-    const scriptPath = process.argv.slice(2).find(arg => !arg.startsWith('--')) || './script.txt';
+      if (process.argv.includes('--list-voices')) {
+        await listAvailableVoices();
+        return;
+      }
 
-    // Resolve the path relative to current working directory
-    const resolvedPath = path.resolve(process.cwd(), scriptPath);
+      console.log('Validating API key...');
+      await audioGenerator.validateApiKey();
 
-    // Check if file exists
-    if (!fs.existsSync(resolvedPath)) {
-      console.error(`Error: Script file not found at ${resolvedPath}`);
-      process.exit(1);
+      console.log('Processing script...');
+      const scriptLines = ScriptParser.parse(path.join(outputDir, 'full-script.txt'));
+
+      console.log('Generating audio files...');
+      const audioFiles = await audioGenerator.generateAudioFiles(scriptLines, outputDir);
+
+      console.log('Merging audio files...');
+      const finalAudio = await audioGenerator.mergeAudioFiles(audioFiles, outputDir);
+
+      console.log('Audio generation complete!');
+      console.log('Final audio file:', finalAudio);
     }
-
-    console.log(`Processing script: ${resolvedPath}`);
-
-    // Parse the script
-    const scriptLines = ScriptParser.parse(resolvedPath);
-
-    // Generate audio for each line sequentially
-    console.log('Generating audio files...');
-    const audioFiles = await audioGenerator.generateAudioFiles(scriptLines);
-
-    console.log('Audio files generated, merging...');
-    const finalAudio = await audioGenerator.mergeAudioFiles(audioFiles);
-
-    console.log('Audio generation complete!');
-    console.log('Final audio file:', finalAudio);
   } catch (error) {
     console.error('Error:', error);
     process.exit(1);

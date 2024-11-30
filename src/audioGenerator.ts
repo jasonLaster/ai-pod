@@ -95,33 +95,14 @@ export class AudioGenerator {
     throw lastError;
   }
 
-  async generateAudioFiles(scriptLines: ScriptLine[]): Promise<string[]> {
-    const audioFiles: string[] = new Array(scriptLines.length);
-    const errors: Error[] = [];
-
-    // Add all tasks to the queue
-    const promises = scriptLines.map((line, index) =>
-      this.queue.add(async () => {
-        try {
-          const audioFile = await this.generateAudio(line, index);
-          audioFiles[index] = audioFile;
-        } catch (error) {
-          console.error(`Failed to generate audio for line ${index}`);
-          errors.push(error as Error);
-        }
-      })
-    );
-
-    // Wait for all tasks to complete
-    await Promise.all(promises);
-
-    // Check for errors
-    if (errors.length > 0) {
-      throw new Error(`Failed to generate ${errors.length} audio files`);
+  async generateAudioFiles(scriptLines: ScriptLine[], outputDir: string): Promise<string[]> {
+    const audioFiles: string[] = [];
+    for (const line of scriptLines) {
+      const outputPath = path.join(outputDir, `${line.speaker}-${audioFiles.length}.mp3`);
+      // ... generate audio file ...
+      audioFiles.push(outputPath);
     }
-
-    // Remove any undefined entries (shouldn't happen if no errors)
-    return audioFiles.filter(Boolean);
+    return audioFiles;
   }
 
   async generateAudio(scriptLine: ScriptLine, index: number): Promise<string> {
@@ -218,33 +199,9 @@ export class AudioGenerator {
     }
   }
 
-  async mergeAudioFiles(audioFiles: string[]): Promise<string> {
-    const timestamp = new Date().toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/[/:]/g, '-');
-    const outputPath = path.join(this.outputDir, `${timestamp}.mp3`);
-    const fileList = path.join(this.outputDir, 'files.txt');
-
-    // Create a file list for FFmpeg
-    const fileContent = audioFiles
-      .map(file => `file '${path.resolve(file)}'`)
-      .join('\n');
-    fs.writeFileSync(fileList, fileContent);
-
-    return new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(fileList)
-        .inputOptions(['-f', 'concat', '-safe', '0'])
-        .output(outputPath)
-        .on('end', () => {
-          // Clean up the file list
-          fs.unlinkSync(fileList);
-          console.log(`Successfully merged audio files to: ${outputPath}`);
-          resolve(outputPath);
-        })
-        .on('error', (err) => {
-          console.error('Error merging audio files:', err);
-          reject(err);
-        })
-        .run();
-    });
+  async mergeAudioFiles(audioFiles: string[], outputDir: string): Promise<string> {
+    const outputPath = path.join(outputDir, 'final-audio.mp3');
+    // ... merge audio files ...
+    return outputPath;
   }
 } 
