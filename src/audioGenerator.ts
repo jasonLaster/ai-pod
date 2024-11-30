@@ -5,10 +5,14 @@ import { ScriptLine, SpeakerVoice } from './types';
 import { config, speakerVoices } from './config';
 import { Readable } from 'stream';
 import ffmpeg from 'fluent-ffmpeg';
+import { AudioCache } from './cache';
+import PQueue from 'p-queue';
 
 export class AudioGenerator {
   private readonly outputDir: string;
   private client: ElevenLabsClient;
+  private cache: AudioCache;
+  private queue: PQueue;
 
   constructor() {
     if (!config.elevenLabsApiKey) {
@@ -16,6 +20,14 @@ export class AudioGenerator {
     }
 
     this.initClient();
+    this.cache = new AudioCache();
+
+    // Initialize queue with concurrency of 5
+    this.queue = new PQueue({
+      concurrency: 5,
+      interval: 1000,  // Time between dequeuing new items
+      intervalCap: 2   // Number of items to process per interval
+    });
 
     // Create a timestamped directory for this run
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -84,39 +96,43 @@ export class AudioGenerator {
   }
 
   async generateAudioFiles(scriptLines: ScriptLine[]): Promise<string[]> {
-    const audioFiles: string[] = [];
+    const audioFiles: string[] = new Array(scriptLines.length);
+    const errors: Error[] = [];
 
-    for (let i = 0; i < scriptLines.length; i++) {
-      try {
-        const audioFile = await this.generateAudio(scriptLines[i], i);
-        audioFiles.push(audioFile);
-
-        // Add a small delay between successful generations
-        if (i < scriptLines.length - 1) {
-          await this.delay(500);
+    // Add all tasks to the queue
+    const promises = scriptLines.map((line, index) =>
+      this.queue.add(async () => {
+        try {
+          const audioFile = await this.generateAudio(line, index);
+          audioFiles[index] = audioFile;
+        } catch (error) {
+          console.error(`Failed to generate audio for line ${index}`);
+          errors.push(error as Error);
         }
-      } catch (error) {
-        console.error(`Failed to generate audio for line ${i}, skipping remaining lines`);
-        throw error;
-      }
+      })
+    );
+
+    // Wait for all tasks to complete
+    await Promise.all(promises);
+
+    // Check for errors
+    if (errors.length > 0) {
+      throw new Error(`Failed to generate ${errors.length} audio files`);
     }
 
-    return audioFiles;
+    // Remove any undefined entries (shouldn't happen if no errors)
+    return audioFiles.filter(Boolean);
   }
 
   async generateAudio(scriptLine: ScriptLine, index: number): Promise<string> {
-    const voiceId = this.getVoiceId(scriptLine.speaker);
     const outputPath = path.join(this.outputDir, `${index.toString().padStart(3, '0')}.mp3`);
 
-    // Check if file already exists and has content
-    if (fs.existsSync(outputPath)) {
-      const stats = fs.statSync(outputPath);
-      if (stats.size > 0) {
-        console.log(`Using cached audio file: ${outputPath}`);
-        return outputPath;
-      } else {
-        fs.unlinkSync(outputPath); // Remove empty file
-      }
+    // Check cache first
+    const cachedPath = this.cache.get(scriptLine.speaker, scriptLine.text);
+    if (cachedPath) {
+      console.log(`Using cached audio for line ${index}`);
+      this.cache.copyToOutputDir(cachedPath, outputPath);
+      return outputPath;
     }
 
     try {
@@ -125,6 +141,7 @@ export class AudioGenerator {
       // Add delay between requests to avoid rate limits
       await this.delay(2000);
 
+      const voiceId = this.getVoiceId(scriptLine.speaker);
       const response = await this.retryWithBackoff(() =>
         this.client.textToSpeech.convert(voiceId, {
           model_id: 'eleven_turbo_v2',
@@ -146,6 +163,9 @@ export class AudioGenerator {
       }
 
       fs.writeFileSync(outputPath, audioBuffer);
+
+      // Cache the generated audio
+      this.cache.set(scriptLine.speaker, scriptLine.text, outputPath);
 
       console.log(`Generated audio file: ${outputPath} (${audioBuffer.length} bytes)`);
       return outputPath;
@@ -199,7 +219,8 @@ export class AudioGenerator {
   }
 
   async mergeAudioFiles(audioFiles: string[]): Promise<string> {
-    const outputPath = path.join(this.outputDir, 'final_podcast.mp3');
+    const timestamp = new Date().toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/[/:]/g, '-');
+    const outputPath = path.join(this.outputDir, `${timestamp}.mp3`);
     const fileList = path.join(this.outputDir, 'files.txt');
 
     // Create a file list for FFmpeg
