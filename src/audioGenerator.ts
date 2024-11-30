@@ -9,7 +9,6 @@ import { AudioCache } from './cache';
 import PQueue from 'p-queue';
 
 export class AudioGenerator {
-  private readonly outputDir: string;
   private client: ElevenLabsClient;
   private cache: AudioCache;
   private queue: PQueue;
@@ -28,19 +27,6 @@ export class AudioGenerator {
       interval: 1000,  // Time between dequeuing new items
       intervalCap: 2   // Number of items to process per interval
     });
-
-    // Create a timestamped directory for this run
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    this.outputDir = path.join(config.outputDir, timestamp);
-
-    if (!fs.existsSync(config.outputDir)) {
-      fs.mkdirSync(config.outputDir, { recursive: true });
-    }
-    if (!fs.existsSync(this.outputDir)) {
-      fs.mkdirSync(this.outputDir, { recursive: true });
-    }
-
-    console.log(`Output directory: ${this.outputDir}`);
   }
 
   private initClient() {
@@ -49,8 +35,61 @@ export class AudioGenerator {
     });
   }
 
-  private delay(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  async generateAudioFiles(scriptLines: ScriptLine[], outputDir: string): Promise<string[]> {
+    console.log(`Generating ${scriptLines.length} audio files...`);
+
+    const tasks = scriptLines.map((line, index) => async () => {
+      return this.generateAudio(line, index, outputDir);
+    });
+
+    try {
+      const audioFiles = await this.queue.addAll(tasks);
+      console.log('All audio files generated successfully');
+      return audioFiles.filter((file): file is string => file !== null);
+    } catch (error) {
+      console.error('Error generating audio files:', error);
+      throw error;
+    }
+  }
+
+  private async generateAudio(scriptLine: ScriptLine, index: number, outputDir: string): Promise<string> {
+    const outputPath = path.join(outputDir, `${index.toString().padStart(3, '0')}-${scriptLine.speaker}.mp3`);
+
+    // Check cache first
+    const cachedPath = this.cache.get(scriptLine.speaker, scriptLine.text);
+    if (cachedPath) {
+      console.log(`Using cached audio for line ${index}`);
+      await this.cache.copyToOutputDir(cachedPath, outputPath);
+      return outputPath;
+    }
+
+    return await this.retryWithBackoff(async () => {
+      console.log(`Generating audio for line ${index}: "${scriptLine.text.substring(0, 50)}..."`);
+
+      const voiceId = this.getVoiceId(scriptLine.speaker);
+      const response = await this.client.textToSpeech.convert(voiceId, {
+        model_id: 'eleven_turbo_v2',
+        text: scriptLine.text,
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.5,
+          style: 0,
+          use_speaker_boost: true
+        }
+      });
+
+      const audioBuffer = await this.streamToBuffer(response as unknown as Readable);
+
+      if (!audioBuffer || audioBuffer.length === 0) {
+        throw new Error('Received empty audio buffer');
+      }
+
+      await Bun.write(outputPath, audioBuffer);
+      await this.cache.set(scriptLine.speaker, scriptLine.text, outputPath);
+
+      console.log(`Generated audio file: ${outputPath} (${audioBuffer.length} bytes)`);
+      return outputPath;
+    });
   }
 
   private async retryWithBackoff<T>(
@@ -65,18 +104,15 @@ export class AudioGenerator {
     while (attempt < maxRetries) {
       try {
         if (attempt > 0) {
-          // Exponential backoff with jitter
           const exponentialDelay = Math.min(
             initialDelay * Math.pow(2, attempt),
             maxDelay
           );
-          const jitter = Math.random() * 1000; // Add up to 1 second of random jitter
+          const jitter = Math.random() * 1000;
           const delayMs = exponentialDelay + jitter;
 
           console.log(`Attempt ${attempt + 1}/${maxRetries}: Waiting ${Math.round(delayMs)}ms before retry...`);
           await this.delay(delayMs);
-
-          // Reinitialize client on retry
           this.initClient();
         }
 
@@ -95,65 +131,49 @@ export class AudioGenerator {
     throw lastError;
   }
 
-  async generateAudioFiles(scriptLines: ScriptLine[], outputDir: string): Promise<string[]> {
-    const audioFiles: string[] = [];
-    for (const line of scriptLines) {
-      const outputPath = path.join(outputDir, `${line.speaker}-${audioFiles.length}.mp3`);
-      // ... generate audio file ...
-      audioFiles.push(outputPath);
-    }
-    return audioFiles;
+  private delay(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async generateAudio(scriptLine: ScriptLine, index: number): Promise<string> {
-    const outputPath = path.join(this.outputDir, `${index.toString().padStart(3, '0')}.mp3`);
+  async mergeAudioFiles(audioFiles: string[], outputDir: string): Promise<string> {
+    const outputPath = path.join(outputDir, 'final-audio.mp3');
 
-    // Check cache first
-    const cachedPath = this.cache.get(scriptLine.speaker, scriptLine.text);
-    if (cachedPath) {
-      console.log(`Using cached audio for line ${index}`);
-      this.cache.copyToOutputDir(cachedPath, outputPath);
-      return outputPath;
-    }
+    return new Promise((resolve, reject) => {
+      const command = ffmpeg();
 
-    try {
-      console.log(`Generating audio for line ${index}: "${scriptLine.text.substring(0, 50)}..."`);
+      // Add each audio file to the command
+      audioFiles.forEach(file => {
+        command.input(file);
+      });
 
-      // Add delay between requests to avoid rate limits
-      await this.delay(2000);
-
-      const voiceId = this.getVoiceId(scriptLine.speaker);
-      const response = await this.retryWithBackoff(() =>
-        this.client.textToSpeech.convert(voiceId, {
-          model_id: 'eleven_turbo_v2',
-          text: scriptLine.text,
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.5,
-            style: 0,
-            use_speaker_boost: true
-          }
+      // Concatenate all files
+      command
+        .on('error', (err) => {
+          console.error('Error merging audio files:', err);
+          reject(err);
         })
-      );
+        .on('end', () => {
+          console.log('Audio merge completed');
+          resolve(outputPath);
+        })
+        .mergeToFile(outputPath);
+    });
+  }
 
-      const audioBuffer = await this.streamToBuffer(response as unknown as Readable);
-
-      // Verify buffer has content
-      if (!audioBuffer || audioBuffer.length === 0) {
-        throw new Error('Received empty audio buffer');
-      }
-
-      fs.writeFileSync(outputPath, audioBuffer);
-
-      // Cache the generated audio
-      this.cache.set(scriptLine.speaker, scriptLine.text, outputPath);
-
-      console.log(`Generated audio file: ${outputPath} (${audioBuffer.length} bytes)`);
-      return outputPath;
-    } catch (error) {
-      console.error(`Error generating audio for line ${index}:`, error);
-      throw error;
+  private getVoiceId(speaker: string): string {
+    const voice = speakerVoices.find(v => v.speaker === speaker);
+    if (!voice) {
+      throw new Error(`No voice ID configured for speaker: ${speaker}`);
     }
+    return voice.voiceId;
+  }
+
+  private async streamToBuffer(stream: Readable): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
   }
 
   async validateApiKey() {
@@ -169,39 +189,13 @@ export class AudioGenerator {
     }
   }
 
-  private getVoiceId(speaker: string): string {
-    const voice = speakerVoices.find(v => v.speaker === speaker);
-    if (!voice) {
-      throw new Error(`No voice ID configured for speaker: ${speaker}`);
-    }
-    return voice.voiceId;
-  }
-
-  private async streamToBuffer(stream: Readable): Promise<Buffer> {
-    const chunks: Buffer[] = [];
-
-    for await (const chunk of stream) {
-      chunks.push(Buffer.from(chunk));
-    }
-
-    return Buffer.concat(chunks);
-  }
-
-  // Updated listVoices method
   async listVoices() {
     try {
       const response = await this.client.voices.getAll();
-      // Ensure we're returning an array of voices
       return Array.isArray(response) ? response : response.voices || [];
     } catch (error) {
       console.error('Error fetching voices:', error);
       throw error;
     }
-  }
-
-  async mergeAudioFiles(audioFiles: string[], outputDir: string): Promise<string> {
-    const outputPath = path.join(outputDir, 'final-audio.mp3');
-    // ... merge audio files ...
-    return outputPath;
   }
 } 
