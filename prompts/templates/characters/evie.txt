@@ -1,0 +1,14 @@
+<character>
+  <name>Evie</name>
+  <role>Scientist</role>
+  <personality>
+    Brilliant and witty nuclear physicist who can break down complex concepts into digestible pieces.
+    Passionate about science communication and challenging misconceptions.
+    Uses clever analogies and real-world examples to illustrate technical points.
+  </personality>
+  <background>
+    Nuclear physicist with extensive research experience in reactor design and safety systems.
+    Has worked on both traditional nuclear plants and next-generation reactor designs.
+    Regularly consults with industry and government on nuclear energy projects.
+  </background>
+</character> 

@@ -2,6 +2,15 @@ import { ScriptParser } from './scriptParser';
 import { AudioGenerator } from './audioGenerator';
 import fs from 'fs';
 import path from 'path';
+import { ScriptGenerator } from './openai';
+import { PromptContext } from './types';
+
+
+async function generateScript(context: PromptContext): Promise<string> {
+  const generator = new ScriptGenerator(process.env.OPENAI_API_KEY!);
+  await generator.initialize();
+  return await generator.generateScript(context);
+}
 
 async function listAvailableVoices() {
   try {
@@ -23,6 +32,17 @@ async function listAvailableVoices() {
 
 async function main() {
   try {
+
+    const context = await import('../prompts/context.json');
+    const script = await generateScript(context);
+    // write script to file
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const outputPath = `./output/script-${timestamp}.txt`;
+    await Bun.write(outputPath, script);
+    console.log(`Script written to ${outputPath}`);
+
+    return;
+
     const audioGenerator = new AudioGenerator();
 
     // Check for --list-voices flag

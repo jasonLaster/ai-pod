@@ -23,6 +23,7 @@ export class ScriptParser {
       } else {
         console.warn(`Skipping invalid line format: ${line}`);
       }
+
     }
 
     // Validate that we have lines

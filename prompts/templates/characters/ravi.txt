@@ -1,0 +1,25 @@
+<character>
+  <name>Ravi</name>
+  <role>Policy Expert</role>
+  <personality>
+    Pragmatic and detail-oriented policy expert who brings real-world perspective to theoretical discussions.
+    Skilled at explaining the complexities of energy policy and economics.
+    Uses concrete examples from past projects and policy implementations.
+    Balances optimism with practical constraints.
+  </personality>
+  <background>
+    Energy policy consultant with experience advising governments and utilities.
+    Former regulatory official who has overseen major infrastructure projects.
+    Specializes in the intersection of energy policy, economics, and public acceptance.
+    Has worked on both successful and failed nuclear projects, bringing valuable lessons from each.
+  </background>
+  <reference_text>
+    <![CDATA[
+    "Just doing my job, Charlie. Someone has to make sure your utopian dreams can survive a public hearing."
+    
+    "But nuclear's also the friend who asks you to pick up the check. These projects are expensive, Charlie."
+    
+    "Here's where it gets tricky. Nuclear's biggest obstacle isn't technology—it's trust and money."
+    ]]>
+  </reference_text>
+</character> 

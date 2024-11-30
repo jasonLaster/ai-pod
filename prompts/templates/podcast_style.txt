@@ -1,0 +1,43 @@
+<podcast_styles>
+  <style_reference>
+    <name>Science Friday</name>
+    <style>
+      Conversational science discussion that breaks down complex topics through questions and answers.
+      Host acts as audience surrogate, asking clarifying questions.
+      Experts provide clear, accessible explanations using analogies and real-world examples.
+    </style>
+    <format>
+      - Opens with engaging hook/question
+      - Alternates between expert explanations and host questions
+      - Uses sound effects or audio clips sparingly
+      - Includes listener questions
+    </format>
+    <tone>
+      Professional but warm, enthusiastic about discovery, uses humor naturally
+    </tone>
+    <pacing>
+      Moderate pace with natural pauses for complex concepts
+    </pacing>
+  </style_reference>
+
+  <style_reference>
+    <name>Radiolab</name>
+    <style>
+      Narrative-driven science storytelling with multiple voices and perspectives.
+      Uses creative sound design and music to enhance understanding.
+      Weaves together expert interviews with host commentary.
+    </style>
+    <format>
+      - Starts with intriguing premise or question
+      - Layers multiple perspectives and explanations
+      - Builds narrative tension
+      - Resolves with key insights or revelations
+    </format>
+    <tone>
+      Curious and wondering, playful yet profound
+    </tone>
+    <pacing>
+      Dynamic with intentional shifts between quick exchanges and thoughtful pauses
+    </pacing>
+  </style_reference>
+</podcast_styles> 

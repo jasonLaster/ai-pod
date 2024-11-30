@@ -1,0 +1,27 @@
+{
+  "topic": "Nuclear Energy and Its Role in Fighting Climate Change",
+  "characters": [
+    {
+      "name": "Charlie",
+      "role": "Host",
+      "personality": "Curious and enthusiastic",
+      "background": "Podcast host"
+    },
+    {
+      "name": "Evie",
+      "role": "Scientist",
+      "personality": "Brilliant and witty",
+      "background": "Nuclear physicist"
+    },
+    {
+      "name": "Ravi",
+      "role": "Policy Expert",
+      "personality": "Pragmatic and detail-oriented",
+      "background": "Energy policy consultant"
+    }
+  ],
+  "additionalContext": [
+    "nuclear.txt"
+  ],
+  "format": "dialogue"
+}
