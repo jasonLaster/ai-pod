@@ -1,0 +1,4 @@
+HOST: Welcome to our podcast! Today we're discussing artificial intelligence.
+GUEST1: Thanks for having me! I'm excited to share my thoughts on AI.
+HOST: Let's start with the basics. What is AI?
+GUEST1: AI is a broad field of computer science focused on creating intelligent machines. 
